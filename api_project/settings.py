@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-df5vkij5%p%ve-%bdh&=7v8rs8s9)1e7@rd!0=%m#nn!=rd(4+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["http://118.68.163.71", 'localhost']
 
 # spring.data.mongodb.uri=mongodb+srv://qhuy:191916823@capstone.l9sjtzd.mongodb.net/test1
 # spring.data.mongodb.database=test1
@@ -55,9 +55,12 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
 ]
+CORS_ORIGIN_WHITELIST = [
+    'http://localhost:3000',
+]
 APPEND_SLASH = False
 CSRF_COOKIE_SECURE = False
-
+CSRF_COOKIE_SAMESITE = 'None'
 
 ROOT_URLCONF = 'api_project.urls'
 

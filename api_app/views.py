@@ -14,7 +14,7 @@ from django.http import HttpResponse
 import sqlite3
 import hashlib
 import requests
-
+from PIL import Image
 recognizer = cv2.face.LBPHFaceRecognizer_create()
 recognizer.read('/home/qhuy/capstone/api_project/api_app/recognizer/trainner.yml')
 # cam = cv2.VideoCapture(0)
@@ -229,57 +229,57 @@ def view_a(request):
 
 # print("Trained!")
 
-@csrf_exempt
-def api_view_b(request):
-    if request.method == 'POST':
-        path = '/home/qhuy/capstone/api_project/api_app/dataset'
-        faceSamples, Ids = view_b(path)
+# @csrf_exempt
+# def api_view_b(request):
+#     if request.method == 'POST':
+#         path = '/home/qhuy/capstone/api_project/api_app/dataset'
+#         faceSamples, Ids = view_b(path)
 
-        # Create a mapping dictionary to encode string IDs as unique integers
-        id_mapping = {id_str: idx for idx, id_str in enumerate(set(Ids))}
+#         # Create a mapping dictionary to encode string IDs as unique integers
+#         id_mapping = {id_str: idx for idx, id_str in enumerate(set(Ids))}
 
-        # Convert the string IDs to integer labels using the mapping dictionary
-        encoded_labels = [id_mapping[id_str] for id_str in Ids]
+#         # Convert the string IDs to integer labels using the mapping dictionary
+#         encoded_labels = [id_mapping[id_str] for id_str in Ids]
 
-        # Train the recognizer with the face samples and encoded integer labels
-        for i, faceSample in enumerate(faceSamples):
-            recognizer.update([faceSample], np.array([encoded_labels[i]], dtype=np.int32))
+#         # Train the recognizer with the face samples and encoded integer labels
+#         for i, faceSample in enumerate(faceSamples):
+#             recognizer.update([faceSample], np.array([encoded_labels[i]], dtype=np.int32))
 
 
-        # Save the model
-        recognizer.save('/home/qhuy/capstone/api_project/api_app/recognizer/trainner.yml')
-        # Save the id_mapping dictionary to a file for future use
-        with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'w') as f:
-            json.dump(id_mapping, f)
+#         # Save the model
+#         recognizer.save('/home/qhuy/capstone/api_project/api_app/recognizer/trainner.yml')
+#         # Save the id_mapping dictionary to a file for future use
+#         with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'w') as f:
+#             json.dump(id_mapping, f)
 
-        return JsonResponse({"message": "Training completed successfully"})
-    else:
-        return JsonResponse({'message': 'Invalid request method'})
+#         return JsonResponse({"message": "Training completed successfully"})
+#     else:
+#         return JsonResponse({'message': 'Invalid request method'})
 
-def view_b(path):
-    # Get all file paths in the directory
-    imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
-    # Create empty face list
-    faceSamples = []
-    # Create empty ID list
-    Ids = []
-    # Loop through all image paths and load the IDs and images
-    for imagePath in imagePaths:
-        if imagePath.endswith(".jpg"):
-            # Load the image and convert it to grayscale
-            pilImage = Image.open(imagePath).convert('L')
-            # Convert the PIL image to a numpy array
-            imageNp = np.array(pilImage, 'uint8')
-            # Get the ID from the image file name
-            filename = os.path.splitext(os.path.basename(imagePath))[0]
-            Id = filename.split(".")[1]
-            # Extract the face from the training image sample
-            faces = detector.detectMultiScale(imageNp)
-            # If a face is detected, append it to the list along with its ID
-            for (x, y, w, h) in faces:
-                faceSamples.append(imageNp[y:y+h, x:x+w])
-                Ids.append(str(Id))
-    return faceSamples, Ids
+# def view_b(path):
+#     # Get all file paths in the directory
+#     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
+#     # Create empty face list
+#     faceSamples = []
+#     # Create empty ID list
+#     Ids = []
+#     # Loop through all image paths and load the IDs and images
+#     for imagePath in imagePaths:
+#         if imagePath.endswith(".jpg"):
+#             # Load the image and convert it to grayscale
+#             pilImage = Image.open(imagePath).convert('L')
+#             # Convert the PIL image to a numpy array
+#             imageNp = np.array(pilImage, 'uint8')
+#             # Get the ID from the image file name
+#             filename = os.path.splitext(os.path.basename(imagePath))[0]
+#             Id = filename.split(".")[1]
+#             # Extract the face from the training image sample
+#             faces = detector.detectMultiScale(imageNp)
+#             # If a face is detected, append it to the list along with its ID
+#             for (x, y, w, h) in faces:
+#                 faceSamples.append(imageNp[y:y+h, x:x+w])
+#                 Ids.append(str(Id))
+#     return faceSamples, Ids
 
 # @csrf_exempt
 # def api_view_b(request):
@@ -743,3 +743,444 @@ def view_d(request):
     finally:            
         release_camera()
     return JsonResponse({'success': True})
+
+
+@csrf_exempt
+def camera_stream(request):
+    # Replace the IP address and port with your camera's IP address and port
+    camera_url = 'cameraqhuy.ddns.net:80'
+
+    # Open the camera stream
+    cap = cv2.VideoCapture(camera_url)
+
+    # Function to generate frames from the camera stream
+    def generate_frames():
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Process the frame if needed (e.g., face detection, object recognition, etc.)
+
+            # Convert the frame to JPEG format
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+
+            # Yield the frame as an HTTP response
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+
+    # Set the response headers to generate a multipart HTTP response
+    response = StreamingHttpResponse(generate_frames(),
+                                     content_type='multipart/x-mixed-replace; boundary=frame')
+
+    # Release the camera when the response is closed
+    cap.release()
+
+    return response
+
+# file: yourapp/views.py
+from django.http import JsonResponse
+
+# @csrf_exempt
+# def upload_image(request):
+#     if request.method == 'POST' and request.FILES['image']:
+#         image = request.FILES['image']
+#         # Lưu ảnh vào thư mục dataset
+#         with open('/home/qhuy/capstone/api_project/api_app/dataset/' + image.name, 'wb+') as destination:
+#             for chunk in image.chunks():
+#                 destination.write(chunk)
+#         return JsonResponse({'message': 'Upload success'})
+#     return JsonResponse({'message': 'Upload failed'}, status=400)
+
+@csrf_exempt
+def upload_image(request):
+    if request.method == 'POST' and request.FILES.getlist('images'):
+        images = request.FILES.getlist('images')
+        success_count = 0
+
+        for image in images:
+            # destination = settings.MEDIA_ROOT + image.name
+            with open('/home/qhuy/capstone/api_project/api_app/dataset/' + image.name, 'wb+') as file:
+                for chunk in image.chunks():
+                    file.write(chunk)
+            success_count += 1
+
+        return JsonResponse({'message': f'Uploaded {success_count} images'})
+    
+    return JsonResponse({'message': 'Upload failed'}, status=400)
+
+def convert_to_grayscale(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return gray
+
+
+# def upload_images(request):
+#     if request.method == 'POST' and 'image' in request.FILES:
+#         image = request.FILES['image']
+
+#         # Lưu ảnh vào thư mục dataset (đảm bảo thư mục này đã tồn tại)
+#         image_path = f'/path/to/dataset/{image.name}'
+#         with open(image_path, 'wb') as file:
+#             for chunk in image.chunks():
+#                 file.write(chunk)
+
+#         # Đọc ảnh đã lưu và chuyển đổi thành ảnh xám
+#         image_data = cv2.imread(image_path)
+#         gray_image = convert_to_grayscale(image_data)
+
+#         # Lưu ảnh xám vào thư mục dataset
+#         gray_image_path = f'/path/to/dataset/gray_{image.name}'
+#         cv2.imwrite(gray_image_path, gray_image)
+
+#         return JsonResponse({'success': True, 'message': 'Image uploaded and converted to grayscale.'})
+
+#     return JsonResponse({'success': False, 'message': 'Image upload failed.'})
+###############################################################################################################################
+# @csrf_exempt
+# def check_in(request):
+    
+#     id_mapping = {}  # Initialize an empty dictionary
+
+#     # Load the id_mapping from the JSON file
+#     with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'r') as f:
+#         id_mapping = json.load(f)
+
+#     if request.method == 'POST' and 'image' in request.FILES:
+#         user_id = None 
+#         image = request.FILES['image']
+
+#         # Convert the uploaded image to grayscale
+#         # image_data = cv2.imread(image.path)
+#         # gray_image = convert_to_grayscale(image_data)
+#         image_data = np.frombuffer(image.read(), dtype=np.uint8)
+
+#         # Decode the image data
+#         img = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+
+#         # Convert the image to grayscale
+#         gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+
+#         # Detect faces in the grayscale image
+#         faces = detector.detectMultiScale(gray_image, 1.3, 5)
+
+#         for (x, y, w, h) in faces:
+#             cv2.rectangle(image_data, (x, y), (x + w, y + h), (255, 0, 0), 2)
+#             label, dist = recognizer.predict(gray_image[y:y + h, x:x + w])
+#             profile = None
+#             if dist <= 90:
+#                 # Reverse mapping from label to string ID
+#                 id_str = [key for key, value in id_mapping.items() if value == label]
+#                 if id_str:
+#                     profile = getProfile(id_str[0])
+#             if profile is not None:
+#                 cv2.putText(image_data, "Name: " + str(profile[1]), (x, y + h + 30), fontface, fontscale, fontcolor, 2)
+#                 user_id = id_str[0]
+#                 if user_id is not None:
+#                     break
+
+#         if user_id is not None:
+#             # Call the Spring Boot backend API to check-in the user
+#             check_in_url = "http://171.238.155.142:8080/api/attendance/checkin/" + user_id
+#             try:
+#                 response = requests.post(check_in_url)
+#                 if response.status_code == 200:
+#                     print("Check-in successful")
+#                     return JsonResponse({'success': True})
+#                 else:
+#                     print("Check-in failed")
+#             except requests.exceptions.RequestException as e:
+#                 print("Error occurred during check-in: " + str(e))
+
+#     return JsonResponse({'success': False, 'message': 'Invalid request or check-in failed.'})
+######################################################################################################
+# @csrf_exempt
+# def upload_images(request):
+#     if request.method == 'POST':
+#         images = request.FILES.getlist('image')
+#         dataset_dir = '/home/qhuy/capstone/api_project/api_app/dataset/'
+
+#         for index, image in enumerate(images):
+#             img_data = image.read()
+#             img = cv2.imdecode(np.frombuffer(img_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+#             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+#             faces = detector.detectMultiScale(gray, 1.3, 5)
+
+#             for (x, y, w, h) in faces:
+#                 face_img = gray[y:y+h, x:x+w]
+#                 cv2.imwrite(os.path.join(dataset_dir, f'face_{index}_{x}_{y}.jpg'), face_img)
+
+#         return JsonResponse({'message': 'Images uploaded successfully.'})
+#     else:
+#         return JsonResponse({'message': 'Invalid request method.'})
+
+
+# @csrf_exempt
+# def upload_images(request):
+#     if request.method == 'POST' and 'images' in request.FILES:
+#         images = request.FILES.getlist('images')
+#         dataset_dir = '/home/qhuy/capstone/api_project/api_app/dataset/'
+
+#         for index, image in enumerate(images):
+#             image_data = image.read()
+#             img = cv2.imdecode(np.frombuffer(image_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+#             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+#             # Save the grayscale image to the dataset directory
+#             image_path = os.path.join(dataset_dir, f'image_{index}_gray.jpg')
+#             cv2.imwrite(image_path, gray)
+
+#         return JsonResponse({'message': 'Images uploaded successfully.'})
+#     return JsonResponse({'message': 'Upload failed'}, status=400)
+
+# @csrf_exempt
+# def upload_images(request):
+#     if request.method == 'POST':
+#         images = request.FILES.getlist('images')
+#         dataset_dir = '/home/qhuy/capstone/api_project/api_app/dataset/'
+
+#         for index, image in enumerate(images):
+#             img_data = image.read()
+#             img = cv2.imdecode(np.frombuffer(img_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+#             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+#             faces = detector.detectMultiScale(gray, 1.3, 5)
+
+#             for (x, y, w, h) in faces:
+#                 face_img = gray[y:y+h, x:x+w]
+#                 # file_name = f'User_{index}_{x}_{y}.jpg'
+#                 file_name = image.name
+#                 file_path = os.path.join(dataset_dir, file_name)
+#                 cv2.imwrite(file_path, face_img)
+
+#         return JsonResponse({'message': 'Images uploaded and processed successfully.'})
+#     else:
+#         return JsonResponse({'message': 'Invalid request method.'})
+
+@csrf_exempt
+def upload_images(request):
+    if request.method == 'POST':
+        images = request.FILES.getlist('images')
+        dataset_dir = '/home/qhuy/capstone/api_project/api_app/dataset/'
+        image_size = (200, 200)  # Specify the desired image size
+
+        for index, image in enumerate(images):
+            img_data = image.read()
+            img = cv2.imdecode(np.frombuffer(img_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            faces = detector.detectMultiScale(gray, 1.3, 5)
+
+            for (x, y, w, h) in faces:
+                face_img = gray[y:y+h, x:x+w]
+                face_img_resized = cv2.resize(face_img, image_size)  # Resize the face image
+                file_name = image.name  # Use the original file name
+                file_path = os.path.join(dataset_dir, file_name)
+                cv2.imwrite(file_path, face_img_resized)
+
+        return JsonResponse({'message': 'Images uploaded and processed successfully.'})
+    else:
+        return JsonResponse({'message': 'Invalid request method.'})
+    
+
+
+# @csrf_exempt
+# def check_in(request):
+    
+#     id_mapping = {}  # Initialize an empty dictionary
+
+#     # Load the id_mapping from the JSON file
+#     with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'r') as f:
+#         id_mapping = json.load(f)
+
+#     if request.method == 'POST' and 'image' in request.FILES:
+#         user_id = None 
+#         image = request.FILES['image']
+
+#         # Resize the uploaded image to 200x200 pixels
+#         img = Image.open(image)
+#         resized_img = img.resize((200, 200))
+#         resized_img_data = np.array(resized_img)
+
+#         # Convert the resized image to grayscale
+#         gray_image = cv2.cvtColor(resized_img_data, cv2.COLOR_BGR2GRAY)
+
+#         # Detect faces in the grayscale image
+#         faces = detector.detectMultiScale(gray_image, 1.3, 5)
+
+#         for (x, y, w, h) in faces:
+#             cv2.rectangle(resized_img_data, (x, y), (x + w, y + h), (255, 0, 0), 2)
+#             label, dist = recognizer.predict(gray_image[y:y + h, x:x + w])
+#             profile = None
+#             if dist <= 90:
+#                 # Reverse mapping from label to string ID
+#                 id_str = [key for key, value in id_mapping.items() if value == label]
+#                 if id_str:
+#                     profile = getProfile(id_str[0])
+#             if profile is not None:
+#                 cv2.putText(resized_img_data, "Name: " + str(profile[1]), (x, y + h + 30), fontface, fontscale, fontcolor, 2)
+#                 user_id = id_str[0]
+#                 if user_id is not None:
+#                     break
+
+#         if user_id is not None:
+#             # Call the Spring Boot backend API to check-in the user
+#             check_in_url = "http://171.238.155.142:8080/api/attendance/checkin/" + user_id
+#             try:
+#                 response = requests.post(check_in_url)
+#                 if response.status_code == 200:
+#                     print("Check-in successful")
+#                     return JsonResponse({'success': True})
+#                 else:
+#                     print("Check-in failed")
+#             except requests.exceptions.RequestException as e:
+#                 print("Error occurred during check-in: " + str(e))
+
+#     return JsonResponse({'success': False, 'message': 'Invalid request or check-in failed.'})
+@csrf_exempt
+def check_in(request):
+    id_mapping = {}  # Initialize an empty dictionary
+
+    # Load the id_mapping from the JSON file
+    with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'r') as f:
+        id_mapping = json.load(f)
+
+    if request.method == 'POST' and 'image' in request.FILES:
+        user_id = None 
+        image = request.FILES['image']
+
+        # Convert the uploaded image to OpenCV format
+        img = cv2.imdecode(np.frombuffer(image.read(), np.uint8), cv2.IMREAD_COLOR)
+
+        # Flip the image horizontally
+        img = cv2.flip(img, 1)
+
+        # Define the center and size of the bounding box
+        centerH = img.shape[0] // 2
+        centerW = img.shape[1] // 2
+        sizeboxW = 300
+        sizeboxH = 400
+
+        # Draw the bounding box on the image
+        cv2.rectangle(img, (centerW - sizeboxW // 2, centerH - sizeboxH // 2),
+                    (centerW + sizeboxW // 2, centerH + sizeboxH // 2), (255, 255, 255), 5)
+
+        # Convert the image to grayscale
+        gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # Detect faces in the grayscale image
+        faces = detector.detectMultiScale(gray_image, 1.3, 5)
+
+        for (x, y, w, h) in faces:
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            label, dist = recognizer.predict(gray_image[y:y + h, x:x + w])
+            profile = None
+            if dist <= 75:
+                # Reverse mapping from label to string ID
+                id_str = [key for key, value in id_mapping.items() if value == label]
+                user_id = id_str[0]
+            #     if id_str:
+            #         # SAI OWR DADAY CASI HAM GETpROFILE NO KO COS DATA GIOWF KO CAN CHECK NUAWX
+            #         profile = getProfile(id_str[0])
+            # if profile is not None:
+            #     cv2.putText(img, "Name: " + str(profile[1]), (x, y + h + 30), fontface, fontscale, fontcolor, 2)
+            #     user_id = id_str[0]
+            #     if user_id is not None:
+            #         break
+
+        if user_id is not None:
+            # Call the Spring Boot backend API to check-in the user
+            check_in_url = "http://171.238.155.142:8080/api/attendance/checkin/" + user_id
+            try:
+                response = requests.post(check_in_url)
+                if response.status_code == 200:
+                    print("Check-in successful")
+                    return JsonResponse({'success': True})
+                else:
+                    print("Check-in failed")
+            except requests.exceptions.RequestException as e:
+                print("Error occurred during check-in: " + str(e))
+
+    return JsonResponse({'success': False, 'message': 'Invalid request or check-in failed.'})
+
+
+
+dataset_path = '/home/qhuy/capstone/api_project/api_app/dataset/'
+
+@csrf_exempt
+def capture_view(request):
+    if request.method == 'POST':
+        images = request.FILES.getlist('images')
+        dataset_dir = '/home/qhuy/capstone/api_project/api_app/dataset/'
+        image_size = (200, 200)  # Specify the desired image size
+
+        for index, image in enumerate(images):
+            img_data = image.read()
+            img = cv2.imdecode(np.frombuffer(img_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            faces = detector.detectMultiScale(gray, 1.3, 5)
+
+            for (x, y, w, h) in faces:
+                face_img = gray[y:y+h, x:x+w]
+                face_img_resized = cv2.resize(face_img, image_size)  # Resize the face image
+                gray_face_img = cv2.cvtColor(face_img_resized, cv2.COLOR_GRAY2BGR)  # Convert to grayscale
+                file_name = image.name  # Create a unique file name
+                file_path = os.path.join(dataset_dir, file_name)
+                cv2.imwrite(file_path, gray_face_img)
+
+        return JsonResponse({'message': 'Images processed and saved successfully.'})
+    else:
+        return JsonResponse({'message': 'Invalid request method.'})
+
+
+
+@csrf_exempt
+def api_view_b(request):
+    if request.method == 'POST':
+        path = '/home/qhuy/capstone/api_project/api_app/dataset'
+        faceSamples, Ids = view_b(path)
+
+        # Create a mapping dictionary to encode string IDs as unique integers
+        id_mapping = {id_str: idx for idx, id_str in enumerate(set(Ids))}
+
+        # Convert the string IDs to integer labels using the mapping dictionary
+        encoded_labels = [id_mapping[id_str] for id_str in Ids]
+
+        # Train the recognizer with the face samples and encoded integer labels
+        for i, faceSample in enumerate(faceSamples):
+            recognizer.update([faceSample], np.array([encoded_labels[i]], dtype=np.int32))
+
+
+        # Save the model
+        recognizer.save('/home/qhuy/capstone/api_project/api_app/recognizer/trainner.yml')
+        # Save the id_mapping dictionary to a file for future use
+        with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'w') as f:
+            json.dump(id_mapping, f)
+
+        return JsonResponse({"message": "Training completed successfully"})
+    else:
+        return JsonResponse({'message': 'Invalid request method'})
+
+def view_b(path):
+    # Get all file paths in the directory
+    imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
+    # Create empty face list
+    faceSamples = []
+    # Create empty ID list
+    Ids = []
+    # Loop through all image paths and load the IDs and images
+    for imagePath in imagePaths:
+        if imagePath.endswith(".jpg"):
+            # Load the image and convert it to grayscale
+            pilImage = Image.open(imagePath).convert('L')
+            # Convert the PIL image to a numpy array
+            imageNp = np.array(pilImage, 'uint8')
+            # Get the ID from the image file name
+            filename = os.path.splitext(os.path.basename(imagePath))[0]
+            Id = filename.split(".")[1]
+            # Extract the face from the training image sample
+            faces = detector.detectMultiScale(imageNp)
+            # If a face is detected, append it to the list along with its ID
+            for (x, y, w, h) in faces:
+                faceSamples.append(imageNp[y:y+h, x:x+w])
+                Ids.append(str(Id))
+    return faceSamples, Ids
