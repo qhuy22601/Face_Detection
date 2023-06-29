@@ -16,9 +16,9 @@ import hashlib
 import requests
 from PIL import Image
 recognizer = cv2.face.LBPHFaceRecognizer_create()
-recognizer.read('/home/qhuy/capstone/api_project/api_app/recognizer/trainner.yml')
+recognizer.read('/home/ai/Face_Detection/api_app/recognizer/trainner.yml')
 # cam = cv2.VideoCapture(0)
-detector=cv2.CascadeClassifier('/home/qhuy/capstone/api_project/api_app/haarcascade_frontalface_default.xml')
+detector=cv2.CascadeClassifier('/home/ai/Face_Detection/api_app/haarcascade_frontalface_default.xml')
 
 
 fontface = cv2.FONT_HERSHEY_SIMPLEX
@@ -961,7 +961,7 @@ def convert_to_grayscale(image):
 def upload_images(request):
     if request.method == 'POST':
         images = request.FILES.getlist('images')
-        dataset_dir = '/home/qhuy/capstone/api_project/api_app/dataset/'
+        dataset_dir = '/home/ai/Face_Detection/api_app/dataset/'
         image_size = (200, 200)  # Specify the desired image size
 
         for index, image in enumerate(images):
@@ -1041,7 +1041,7 @@ def check_in(request):
     id_mapping = {}  # Initialize an empty dictionary
 
     # Load the id_mapping from the JSON file
-    with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'r') as f:
+    with open('/home/ai/Face_Detection/api_app/id_mapping.json', 'r') as f:
         id_mapping = json.load(f)
 
     if request.method == 'POST' and 'image' in request.FILES:
@@ -1110,7 +1110,7 @@ dataset_path = '/home/qhuy/capstone/api_project/api_app/dataset/'
 def capture_view(request):
     if request.method == 'POST':
         images = request.FILES.getlist('images')
-        dataset_dir = '/home/qhuy/capstone/api_project/api_app/dataset/'
+        dataset_dir = '/home/ai/Face_Detection/api_app/dataset/'
         image_size = (200, 200)  # Specify the desired image size
 
         for index, image in enumerate(images):
@@ -1136,7 +1136,7 @@ def capture_view(request):
 @csrf_exempt
 def api_view_b(request):
     if request.method == 'POST':
-        path = '/home/qhuy/capstone/api_project/api_app/dataset'
+        path = '/home/ai/Face_Detection/api_app/dataset'
         faceSamples, Ids = view_b(path)
 
         # Create a mapping dictionary to encode string IDs as unique integers
@@ -1151,9 +1151,9 @@ def api_view_b(request):
 
 
         # Save the model
-        recognizer.save('/home/qhuy/capstone/api_project/api_app/recognizer/trainner.yml')
+        recognizer.save('/home/ai/Face_Detection/api_app/recognizer/trainner.yml')
         # Save the id_mapping dictionary to a file for future use
-        with open('/home/qhuy/capstone/api_project/api_app/id_mapping.json', 'w') as f:
+        with open('/home/ai/Face_Detection/api_app/id_mapping.json', 'w') as f:
             json.dump(id_mapping, f)
 
         return JsonResponse({"message": "Training completed successfully"})
@@ -1184,3 +1184,70 @@ def view_b(path):
                 faceSamples.append(imageNp[y:y+h, x:x+w])
                 Ids.append(str(Id))
     return faceSamples, Ids
+
+
+@csrf_exempt
+def check_out(request):
+    id_mapping = {}  # Initialize an empty dictionary
+
+    # Load the id_mapping from the JSON file
+    with open('/home/ai/Face_Detection/api_app/id_mapping.json', 'r') as f:
+        id_mapping = json.load(f)
+
+    if request.method == 'POST' and 'image' in request.FILES:
+        user_id = None 
+        image = request.FILES['image']
+
+        # Convert the uploaded image to OpenCV format
+        img = cv2.imdecode(np.frombuffer(image.read(), np.uint8), cv2.IMREAD_COLOR)
+
+        # Flip the image horizontally
+        img = cv2.flip(img, 1)
+
+        # Define the center and size of the bounding box
+        centerH = img.shape[0] // 2
+        centerW = img.shape[1] // 2
+        sizeboxW = 300
+        sizeboxH = 400
+
+        # Draw the bounding box on the image
+        cv2.rectangle(img, (centerW - sizeboxW // 2, centerH - sizeboxH // 2),
+                    (centerW + sizeboxW // 2, centerH + sizeboxH // 2), (255, 255, 255), 5)
+
+        # Convert the image to grayscale
+        gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # Detect faces in the grayscale image
+        faces = detector.detectMultiScale(gray_image, 1.3, 5)
+
+        for (x, y, w, h) in faces:
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            label, dist = recognizer.predict(gray_image[y:y + h, x:x + w])
+            profile = None
+            if dist <= 75:
+                # Reverse mapping from label to string ID
+                id_str = [key for key, value in id_mapping.items() if value == label]
+                user_id = id_str[0]
+            #     if id_str:
+            #         # SAI OWR DADAY CASI HAM GETpROFILE NO KO COS DATA GIOWF KO CAN CHECK NUAWX
+            #         profile = getProfile(id_str[0])
+            # if profile is not None:
+            #     cv2.putText(img, "Name: " + str(profile[1]), (x, y + h + 30), fontface, fontscale, fontcolor, 2)
+            #     user_id = id_str[0]
+            #     if user_id is not None:
+            #         break
+
+        if user_id is not None:
+            # Call the Spring Boot backend API to check-in the user
+            check_in_url = "http://171.238.155.142:8080/api/attendance/testCheckOut/" + user_id
+            try:
+                response = requests.post(check_in_url)
+                if response.status_code == 200:
+                    print("Check-out successful")
+                    return JsonResponse({'success': True})
+                else:
+                    print("Check-out failed")
+            except requests.exceptions.RequestException as e:
+                print("Error occurred during check-out: " + str(e))
+
+    return JsonResponse({'success': False, 'message': 'Invalid request or check-out failed.'})
